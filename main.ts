@@ -1,4 +1,4 @@
-// Vice Cover Studio v3.6 — the entry program (Node 22, standard library only).
+// Vice Cover Studio v4.4 — the entry program (Node 22, standard library only).
 // It hands the app in: copies this repository's app/ and screenshots/ into the
 // output directory and writes the dossier.json the judge reads, using the
 // vendored make.fun library. Outside the grader, MAKEFUN_OUTPUT_DIR stands
@@ -45,7 +45,7 @@ function handIn() {
   });
   writeFileSync(join(targetDir, 'dossier.json'), dossier);
   const shotNames = readdirSync(join(targetDir, 'screenshots'));
-  console.log(`Vice Cover Studio v3.6 handed in to ${targetDir} (${shotNames.length} screenshots, dossier ${dossier.length} bytes)`);
+  console.log(`Vice Cover Studio v4.4 handed in to ${targetDir} (${shotNames.length} screenshots, dossier ${dossier.length} bytes)`);
 }
 
 handIn();

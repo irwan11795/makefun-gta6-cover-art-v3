@@ -1,4 +1,4 @@
-// Vice Cover Studio v3.6 — screenshot scenes.
+// Vice Cover Studio v4.4 — screenshot scenes.
 // ?shot=editor shows the editor with photos loaded.
 // ?shot=cover shows the cover art full-frame (the app's own drawing of it).
 // Both set window.__shotReady once the frame has been painted.
@@ -12,6 +12,21 @@
 // v3.6: the hero set carries a fifth photo, the Vice City establishing
 // shot, for the last corner — the shot no longer tightens a repeated
 // Leader photo there, so it names no ?zoom4 or ?ay4.
+// v4.0: ?set=coast loads the Coast crew (five candid golden-hour faces)
+// and ?layout=poster picks the full-bleed Poster mosaic — the Golden
+// Coast cover shot is wide 16:9, and its ?ayN values frame each face
+// (the boat and rooftop faces sit high in their photos, so they need
+// small ay values to stay whole).
+// v4.3: the edge-to-edge family/lineup variant is now the DEFAULT
+// (bleed: true in main.js), so shots no longer need ?bleed=1 —
+// ?bleed=0 opts a shot back out to the classic inset rendering.
+// ?stars=0 drops the five gold stars from the quote strip, ?photoN=
+// reassigns a panel to a different photo of the loaded set (the Vice
+// Coast shot puts Nina's direct-to-camera frame in the centre panel),
+// and naming a text param with an empty value (?release=) clears that
+// line — the Vice Coast, Family and Vice Squad shots drop the release
+// pill that way. ayN values follow the PHOTO, so when photoN moves a
+// face to another panel its ay moves with it in shots.json.
 
 import { drawCover } from './cover.js';
 
@@ -34,7 +49,9 @@ function applyParams(api, params) {
     if (input) input.value = api.state.title;
   }
   // The rest of the poster furniture, same pattern as the caption: set
-  // the state, and the matching editor input when it exists.
+  // the state, and the matching editor input when it exists. A param
+  // named with an empty value (?release=) CLEARS its line — that is
+  // how a shot drops a pill instead of filling it.
   const textParams = [
     ['subtitle', 'subtitle', 'subtitleInput'],
     ['tagline', 'tagline', 'taglineInput'],
@@ -51,13 +68,18 @@ function applyParams(api, params) {
     ['billing', 'billing', 'billingInput'],
   ];
   textParams.forEach(([param, key, inputId]) => {
-    const value = params.get(param);
-    if (value) {
-      api.state[key] = value;
-      const input = document.getElementById(inputId);
-      if (input) input.value = value;
-    }
+    if (!params.has(param)) return;
+    const value = params.get(param) ?? '';
+    api.state[key] = value;
+    const input = document.getElementById(inputId);
+    if (input) input.value = value;
   });
+  // Edge-to-edge variant (?bleed=1 / ?bleed=0): a flag, not text —
+  // the default is ON for family/lineup since v4.3, so only the shots
+  // that name ?bleed=0 change it.
+  if (params.get('bleed') === '1') api.state.bleed = true;
+  if (params.get('bleed') === '0') api.state.bleed = false;
+  if (params.get('stars') === '0') api.state.stars = false;
   const layout = params.get('layout');
   if (layout) {
     api.state.layout = layout;
@@ -109,6 +131,17 @@ function applyParams(api, params) {
     const zoom = Number(raw);
     if (Number.isFinite(zoom) && zoom >= 0.5 && zoom <= 3) api.state.panels[i].zoom = zoom;
   }
+  // Per-panel photo assignment (?photo0=3 …): same pattern as the
+  // anchors — only the shots that name a photoN move that panel to a
+  // different photo of the loaded set, so one shot can put a direct-
+  // to-camera face in the centre panel without touching the editor's
+  // default panel order. Out-of-range values are ignored.
+  for (let i = 0; i < api.state.panels.length; i++) {
+    const raw = params.get(`photo${i}`);
+    if (raw === null) continue;
+    const n = Number(raw);
+    if (Number.isFinite(n) && n >= 0 && n < api.state.images.length) api.state.panels[i].photo = n;
+  }
   // Per-panel cast-tag override (?tag0=THE%20LEADER …): same pattern as
   // the anchors — only the shots that name a tagN rename that panel, so
   // the heist crew can play hero roles on one cover while the editor
@@ -120,6 +153,10 @@ function applyParams(api, params) {
     const clean = tag.toUpperCase().slice(0, 12);
     if (clean) api.state.panels[i].tag = clean;
   }
+  // The tag/photo overrides above rename panels, so refresh the panel
+  // chips — otherwise the editor shot would show the set's default
+  // tags on panels that now carry other faces.
+  api.renderPanelChips();
 }
 
 function markReady() {

@@ -1,4 +1,4 @@
-// Vice Cover Studio v3.6 — editor wiring.
+// Vice Cover Studio v4.4 — editor wiring.
 // Owns the state, the photo library, the controls and the PNG export.
 // All drawing lives in cover.js; this file only drives it.
 
@@ -31,12 +31,25 @@ const DEFAULT_TAGS = ['MARINA', 'DANTE', 'SOFIA', 'RICO'];
 // over the port, streets and neon signs, with no people in frame, so no
 // face repeats anywhere on the cover. All four are new faces, none of
 // them Marina, Dante, Sofia or Rico from the heist set.
+// The coast set (v4.0) is the Poster mosaic's crew — five candid,
+// laughing faces shot at golden hour, all new faces again: Lucia
+// laughing in the convertible, Marco on the boat, the beach-party crew,
+// Nina dancing on the neon street, and Dario on the rooftop at dusk.
+// v4.2: the Vice Coast shot puts Nina's direct-to-camera frame in the
+// big centre panel (via ?photoN=) and Lucia's laugh on a side panel —
+// the set order below is the editor default, the shot reorders it.
 const SETS = {
   heist: {
     label: 'Sunset Heist crew',
     files: ['samples/sample-1.jpg', 'samples/sample-2.jpg', 'samples/sample-3.jpg', 'samples/sample-4.jpg'],
     names: ['sample-1', 'sample-2', 'sample-3', 'sample-4'],
     tags: ['MARINA', 'DANTE', 'SOFIA', 'RICO'],
+  },
+  coast: {
+    label: 'Coast crew',
+    files: ['samples/media-generation-coast-1-0-2f357962-bb90-4dba-8012-e4188e5e6d60.jpg', 'samples/media-generation-coast-2-0-eaa1168a-fba2-4243-96ab-d323a8f14be7.jpg', 'samples/media-generation-coast-3-0-d5b13a58-e34d-49f8-a993-a370c1002eec.jpg', 'samples/media-generation-coast-4-0-80cf050a-9a91-40a0-bc05-20a05403f8a0.jpg', 'samples/media-generation-coast-5-0-9b80c26f-52a1-4b32-bc20-30a33553971e.jpg'],
+    names: ['coast-1', 'coast-2', 'coast-3', 'coast-4', 'coast-5'],
+    tags: ['LUCIA', 'MARCO', 'THE CREW', 'NINA', 'DARIO'],
   },
   police: {
     label: 'Police crew',
@@ -83,6 +96,11 @@ export const state = {
   outline: true,
   shadow: true,
   italic: true,
+  stars: true,
+  // v4.3: the edge-to-edge family/lineup rendering is the default —
+  // the strips run to the bottom edge with the title over the art.
+  // ?bleed=0 in a shot URL opts back out to the classic inset.
+  bleed: true,
   aspect: 'square',
   images: [],
   panels: freshPanels(),
@@ -131,7 +149,7 @@ async function loadSet(name) {
     state.panels.push({ photo: 0, zoom: 1, ox: 0, oy: 0, ay: 0.5, tag: 'VICE CITY' });
   }
   selectedPanel = 0;
-  const chipId = currentSet === 'police' ? 'setPolice' : currentSet === 'mafia' ? 'setMafia' : currentSet === 'hero' ? 'setHero' : 'setHeist';
+  const chipId = currentSet === 'police' ? 'setPolice' : currentSet === 'mafia' ? 'setMafia' : currentSet === 'hero' ? 'setHero' : currentSet === 'coast' ? 'setCoast' : 'setHeist';
   document.querySelectorAll('.set-chip').forEach((x) => {
     x.classList.toggle('is-active', x.id === chipId);
   });
@@ -145,16 +163,16 @@ async function loadSet(name) {
   render();
 }
 
-// The first load honours ?set=police, ?set=mafia or ?set=hero in the URL
-// (the Police Crew, Family and Vice Heroes cover shots use it); later
-// reloads keep whichever set is showing.
+// The first load honours ?set=police, ?set=mafia, ?set=hero or
+// ?set=coast in the URL (the Police Crew, Family, Vice Heroes and
+// Coast cover shots use it); later reloads keep whichever set is showing.
 let initialSetLoaded = false;
 
 async function loadSamples() {
   if (!initialSetLoaded) {
     initialSetLoaded = true;
     const set = new URLSearchParams(window.location.search).get('set');
-    await loadSet(set === 'police' ? 'police' : set === 'mafia' ? 'mafia' : set === 'hero' ? 'hero' : 'heist');
+    await loadSet(set === 'police' ? 'police' : set === 'mafia' ? 'mafia' : set === 'hero' ? 'hero' : set === 'coast' ? 'coast' : 'heist');
     return;
   }
   await loadSet(currentSet);
@@ -300,6 +318,7 @@ function bindControls() {
   $('setPolice').addEventListener('click', () => loadSet('police'));
   $('setMafia').addEventListener('click', () => loadSet('mafia'));
   $('setHero').addEventListener('click', () => loadSet('hero'));
+  $('setCoast').addEventListener('click', () => loadSet('coast'));
 
   $('zoomRange').addEventListener('input', (e) => {
     state.panels[selectedPanel].zoom = Number(e.target.value) / 100;
@@ -386,7 +405,7 @@ function panelAtPoint(clientX, clientY) {
   const r = stage.getBoundingClientRect();
   const x = ((clientX - r.left) / r.width) * stage.width;
   const y = ((clientY - r.top) / r.height) * stage.height;
-  const panels = layoutPanels(state.layout, stage.width, stage.height);
+  const panels = layoutPanels(state.layout, stage.width, stage.height, state.bleed);
   for (let i = panels.length - 1; i >= 0; i--) {
     const p = panels[i];
     const s = p.slant * p.w;

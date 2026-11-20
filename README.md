@@ -2,7 +2,7 @@
 [![rank](https://make.fun/badge/gta6-cover-art-01/irwan11795/makefun-gta6-cover-art-v3/rank.svg)](https://make.fun/c/gta6-cover-art-01)
 [![reward](https://make.fun/badge/gta6-cover-art-01/irwan11795/makefun-gta6-cover-art-v3/reward.svg)](https://make.fun/c/gta6-cover-art-01)
 
-# Vice Cover Studio v3.6
+# Vice Cover Studio v4.4
 
 Turn any photo + caption into GTA-style cover art: a multi-panel Vice City
 poster with bold lettering and a sunset / neon colour grade, exported as a PNG
@@ -18,10 +18,12 @@ photos are read on your machine and never uploaded.
   Family lineup (five equal vertical strips, shoulder to shoulder — the
   whole Family in one row), and Leader + crew (one big panel for the
   gang's leader, three small panels stacked beside her for the crew),
-  and Spotlight centre (one big panel in the middle for the leader, four
-  small panels in the corners around him for the crew).
+  Spotlight centre (one big panel in the middle for the leader, four
+  small panels in the corners around him for the crew), and Poster
+  mosaic (a full-bleed five-panel mosaic — one large centre panel, four
+  around it, photos edge to edge — with the title overlapping the art).
   One button shuffles the layout.
-- **Four sample-photo sets, one per panel** — the Sunset Heist crew: Marina
+- **Five sample-photo sets, one per panel** — the Sunset Heist crew: Marina
   (blonde, dark sunglasses, boulevard at sunset), Dante (curly hair,
   laughing, neon ocean drive), Sofia (red bandana, dancing at dusk) and
   Rico (bearded, round sunglasses, pier at sunset); the Police crew:
@@ -42,14 +44,23 @@ photos are read on your machine and never uploaded.
   of them Marina, Dante, Sofia or Rico — plus the Vice City establishing
   shot (a dusk skyline over the port, neon streets, no people in frame)
   for the VICE CITY corner, so the cover shows four different faces and
-  the city, never the same face twice. All eighteen photos were
-  made with an image model for this entry. Pick a set with the four
-  pills in the Photos card, or `?set=police` / `?set=mafia` / `?set=hero` in the URL.
+  the city, never the same face twice; and the Coast crew: Lucia
+  (laughing in a convertible at sunset, the big centre panel of the
+  Poster mosaic), Marco (standing on a boat at sunset), the beach-party
+  crew (four friends laughing under string lights and tiki torches),
+  Nina (dancing on a neon street at dusk) and Dario (on a rooftop at
+  dusk) — five candid golden-hour faces, all new. All twenty-three photos were
+  made with an image model for this entry. Pick a set with the five
+  pills in the Photos card, or `?set=police` / `?set=mafia` / `?set=hero` / `?set=coast` in the URL.
   The billing block fills itself in from the four (or five) cast tags.
 - **Poster furniture** — a critic-quote strip with five stars and its
   source across the top, a season badge in the top-right corner, a tagline
   under the title, a release line above the billing block, and the seal
-  badge in the bottom-left corner. Every word of it is ours.
+  badge in the bottom-left corner. Every word of it is ours. The Poster
+  mosaic adds angled cast-tag chips on the photos, a dark pill behind
+  the tagline and the billing line, and a barcode plate in the
+  bottom-right corner — and its title is a huge gold-orange-pink
+  gradient over the art itself, with a hard offset shadow.
 - **Any photo, cropped per panel** — drag a panel to move its photo, scroll to
   zoom, or use the sliders. One photo for all panels, or a different photo per
   panel.
@@ -78,24 +89,39 @@ node serve.ts
 
 Screenshot scenes for the entry: `?shot=editor` shows the editor with the
 sample photos loaded, `?shot=cover` shows the cover art full-frame. Both
-accept `?layout=collage|hero|trio|grid|lineup|slant|family|leader|spotlight`, `?grade=...`,
+accept `?layout=collage|hero|trio|grid|lineup|slant|family|leader|spotlight|poster`, `?grade=...`,
 `?aspect=square|portrait|wide`, `?mode=one|per-panel`, `?caption=...`,
 `?subtitle=...`, `?tagline=...`, `?quote=...`, `?quotesource=...`,
-`?badge=...`, `?release=...`, `?seal=...`, `?billing=...` and `?set=heist|police|mafia|hero`, `?tag0=…&tag1=…&tag2=…&tag3=…&tag4=…` to rename a panel's cast tag for one shot,
+`?badge=...`, `?release=...`, `?seal=...`, `?billing=...` and `?set=heist|police|mafia|hero|coast`, `?tag0=…&tag1=…&tag2=…&tag3=…&tag4=…` to rename a panel's cast tag for one shot,
 and `?ay0=…&ay1=…&ay2=…&ay3=…&ay4=…` to frame a panel's
 photo from its top (smaller ay) instead of its centre — used by the
 Vice Heroes shot so all four faces show whole, forehead to chin —
-and `?zoom0=…&zoom1=…` to tighten one panel's crop.
-The four screenshots in `screenshots/` are taken from `shots.json`:
-`1-cover.jpg` (Vice Heroes, Spotlight centre, Sunset Hero, square — the
-new Leader in the big centre panel, the Driver, the Lookout and the Muscle
-in the corners, the Vice City dusk skyline in the last corner),
-`2-editor.jpg` (editor), `3-cover-square.jpg` (The Family, Family lineup,
-Mafia Gold, square — the Don, the Enforcer, the Bruiser, the Vixen and
-the Siren, all wearing visible gold jewellery) and `4-cover-portrait.jpg`
-(Vice Squad, Lineup, Palm Noir, Police crew, portrait) — three covers
-that differ in title, layout, grade, photos and every line of poster
-furniture.
+and `?zoom0=…&zoom1=…` to tighten one panel's crop,
+`?photo0=…&photo1=…` to put a different photo of the loaded set on a
+panel (the Vice Coast shot puts Nina's direct-to-camera frame in the
+centre panel and Lucia's laugh on a side panel),
+`?bleed=0` restores the classic inset rendering (white-framed panels
+on the sky) for the Family and Lineup layouts, which are edge-to-edge
+by default since v4.3 — the strips run to the bottom edge of the frame
+with the title over the art, the same poster treatment as the mosaic —
+and `?stars=0` to drop the five gold stars from the quote strip.
+Naming a text param with an empty value
+(`?release=`) clears that line. The four screenshots in `screenshots/`
+are taken from `shots.json`:
+`1-cover.jpg` (Vice Coast, Poster mosaic, Sunset Hero, wide 16:9 —
+Nina dancing on the neon street in the big centre panel, Lucia
+laughing in the convertible, Marco on the boat, the beach-party crew
+and Dario on the rooftop in the corners, the title in huge gold-orange-pink
+letters over the art),
+`2-editor.jpg` (editor, v4.4 header, Poster mosaic with the Coast crew,
+full wide preview visible), `3-cover-square.jpg` (The Family, Family lineup
+edge-to-edge, Mafia Gold, square — the Don, the Enforcer, the Bruiser,
+the Vixen and the Siren, all wearing visible gold jewellery; short
+20-character critic quote, no stars, no release pill) and
+`4-cover-portrait.jpg` (Vice Squad, Lineup edge-to-edge, Palm Noir,
+Police crew, portrait — short 18-character critic quote, no stars,
+no release pill) — three covers that differ in title, layout,
+grade, photos and every line of poster furniture.
 
 ## Pointer shortcuts
 

@@ -1,4 +1,4 @@
-// Vice Cover Studio v3.6 — cover renderer.
+// Vice Cover Studio v4.4 — cover renderer.
 // Draws the whole poster on a 2D canvas: sunset sky, skyline, palms, photo
 // panels, big lettering, billing block and seal. Everything here is original
 // art drawn with canvas paths; no external images, fonts or logos are used.
@@ -11,6 +11,19 @@
 // v3.6: the hero set carries a fifth photo, the Vice City establishing
 // shot, for the last corner — so the cover shows four different faces
 // plus the city, and no face repeats.
+// v4.0: the Poster mosaic layout — a full-bleed five-panel mosaic with the
+// title overlapping the art, dense poster furniture (quote band, ticket
+// badge, angled cast chips on the photos, tagline pill, billing pill,
+// seal + barcode) — and a graded-panel cache so re-renders and exports
+// are single-pass drawImage calls instead of re-grading every photo.
+// v4.3: the Family and Lineup layouts are edge-to-edge by default
+// (v4.2 had this as a shot-only ?bleed=1 variant; ?bleed=0 opts out):
+// the strips bleed to the frame edges and run to the bottom edge with
+// the title at ~H*0.70 over the art + a full-height dark scrim — the
+// same poster treatment as the mosaic, so the Family and Vice Squad
+// covers share shot 1's composition and no cover is left with a dead
+// gradient band. The default rendering of the other 7 classic layouts
+// is unchanged.
 
 export const GRADES = [
   {
@@ -110,6 +123,7 @@ export const LAYOUTS = {
   family: { name: 'Family lineup', panels: 5 },
   leader: { name: 'Leader + crew', panels: 4 },
   spotlight: { name: 'Spotlight centre', panels: 5 },
+  poster: { name: 'Poster mosaic', panels: 5 },
 };
 
 export function panelCountFor(layoutId) {
@@ -132,15 +146,43 @@ function mulberry32(seed) {
   };
 }
 
-/** Panel rectangles for a layout inside the cover of size W x H. */
-export function layoutPanels(layoutId, W, H) {
+/** Panel rectangles for a layout inside the cover of size W x H.
+ * `bleed` (v4.3, the default for family and lineup) is the edge-to-edge
+ * variant: the strips bleed to the frame edges with only a thin gutter
+ * between them and run from below the quote strip to the bottom edge of
+ * the frame, so the title can sit ON the art instead of in the empty
+ * band below the panels. Every other layout ignores it. */
+export function layoutPanels(layoutId, W, H, bleed = false) {
   const x0 = W * 0.045;
   const y0 = H * 0.05;
   const pw = W * 0.91;
   const ph = H * 0.62;
   const gap = Math.max(6, W * 0.018);
+  // Thin poster-style gutter for the bleed strips.
+  const bg = Math.max(4, W * 0.005);
+  const bleedH = H - y0;
   const rect = (x, y, w, h, slant = 0) => ({ x, y, w, h, slant });
   switch (layoutId) {
+    case 'poster': {
+      // Poster mosaic: full-bleed, one large centre panel + four around
+      // it. Panels run edge to edge with only a thin dark gutter between
+      // them — the photos fill the whole frame, and the title overlaps
+      // the art instead of sitting in an empty band below it. Panel 0
+      // is the centre star; panels 1–4 are the corners in set order.
+      const pg = Math.max(4, W * 0.005);
+      const centerW = W * 0.42;
+      const sideW = (W - centerW - pg * 2) / 2;
+      const rowH = (H - pg) / 2;
+      const cx = sideW + pg;
+      const rx = cx + centerW + pg;
+      return [
+        rect(cx, 0, centerW, H),
+        rect(0, 0, sideW, rowH),
+        rect(0, rowH + pg, sideW, rowH),
+        rect(rx, 0, sideW, rowH),
+        rect(rx, rowH + pg, sideW, rowH),
+      ];
+    }
     case 'collage': {
       // Four-photo collage: three across the top with the middle panel
       // biggest, one wide panel along the bottom. One photo per panel,
@@ -161,6 +203,10 @@ export function layoutPanels(layoutId, W, H) {
     case 'lineup': {
       // Police lineup: four equal vertical strips, shoulder to shoulder,
       // each with its own cast tag — the whole crew in one row.
+      if (bleed) {
+        const w = (W - bg * 3) / 4;
+        return [0, 1, 2, 3].map((i) => rect(i * (w + bg), y0, w, bleedH));
+      }
       const w = (pw - gap * 3) / 4;
       return [0, 1, 2, 3].map((i) => rect(x0 + i * (w + gap), y0, w, ph));
     }
@@ -170,6 +216,10 @@ export function layoutPanels(layoutId, W, H) {
       // portrait photo fills it top to bottom: the face stays whole
       // forehead to chin AND the gold chain at the chest stays in frame,
       // which a wide-short panel could never show together.
+      if (bleed) {
+        const w = (W - bg * 4) / 5;
+        return [0, 1, 2, 3, 4].map((i) => rect(i * (w + bg), y0, w, bleedH));
+      }
       const w = (pw - gap * 4) / 5;
       return [0, 1, 2, 3, 4].map((i) => rect(x0 + i * (w + gap), y0, w, ph));
     }
@@ -383,20 +433,50 @@ function drawSeal(ctx, cx, cy, r, text, accent) {
   ctx.restore();
 }
 
-function drawCastChip(ctx, x, y, h, tag, grade) {
+function drawCastChip(ctx, x, y, h, tag, grade, tilt = 0) {
   const label = (tag || 'VICE').toUpperCase();
   ctx.save();
   ctx.font = `700 ${h * 0.52}px "Arial Black", Impact, sans-serif`;
   const tw = ctx.measureText(label).width;
   const pad = h * 0.45;
+  const w = tw + pad * 2;
+  if (tilt) {
+    // Angled chip: rotate about the chip's own centre so the tilt never
+    // shifts it sideways off its panel.
+    ctx.translate(x + w / 2, y + h / 2);
+    ctx.rotate(tilt);
+    ctx.translate(-w / 2, -h / 2);
+    x = 0;
+    y = 0;
+  }
   ctx.fillStyle = 'rgba(8, 4, 16, 0.85)';
   ctx.beginPath();
-  ctx.roundRect(x, y, tw + pad * 2, h, h / 2);
+  ctx.roundRect(x, y, w, h, h / 2);
   ctx.fill();
   ctx.fillStyle = grade.accent;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   ctx.fillText(label, x + pad, y + h / 2 + h * 0.04);
+  ctx.restore();
+}
+
+function drawBarcode(ctx, x, y, w, h) {
+  // Tiny barcode plate, bottom-right: a cream plate with deterministic
+  // black bars, like a theatrical one-sheet's ticket code.
+  ctx.save();
+  ctx.fillStyle = '#fff8ea';
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, Math.max(3, h * 0.08));
+  ctx.fill();
+  const rnd = mulberry32(20261120);
+  ctx.fillStyle = '#14090f';
+  let bx = x + w * 0.08;
+  const maxX = x + w * 0.92;
+  while (bx < maxX) {
+    const bw = w * (0.012 + rnd() * 0.03);
+    if (rnd() > 0.35) ctx.fillRect(bx, y + h * 0.14, bw, h * 0.72);
+    bx += bw + w * 0.012;
+  }
   ctx.restore();
 }
 
@@ -445,25 +525,82 @@ function fitTitleFont(ctx, text, maxWidth, startSize) {
   return size;
 }
 
+// Graded-panel cache: one offscreen canvas per (photo, panel size,
+// transform, grade). Re-renders (slider drags, live preview) and the
+// three export sizes reuse it instead of re-drawing + re-grading the
+// photo every frame, so an export is a single pass of cheap drawImage
+// calls. FIFO-capped so a long session cannot grow it without bound.
+const gradedCache = new Map();
+function gradedPanel(img, p, spec, grade, k) {
+  const key = [
+    img.src, grade.id, k.toFixed(2),
+    Math.round(p.w), Math.round(p.h),
+    (spec.zoom || 1).toFixed(3), (spec.ox || 0).toFixed(3),
+    (spec.oy || 0).toFixed(3), (spec.ay ?? 0.5).toFixed(3),
+  ].join('|');
+  const hit = gradedCache.get(key);
+  if (hit) return hit;
+  const c = document.createElement('canvas');
+  c.width = Math.max(2, Math.round(p.w));
+  c.height = Math.max(2, Math.round(p.h));
+  const g = c.getContext('2d');
+  drawPhotoCover(g, img, { x: 0, y: 0, w: p.w, h: p.h, slant: 0 },
+    spec.zoom || 1, spec.ox || 0, spec.oy || 0, spec.ay ?? 0.5);
+  // Grade wash over the photo.
+  g.globalAlpha = 0.22 * k;
+  g.globalCompositeOperation = 'overlay';
+  g.fillStyle = grade.tint;
+  g.fillRect(0, 0, p.w, p.h);
+  g.globalCompositeOperation = 'source-over';
+  g.globalAlpha = 1;
+  // Bottom shade so the cast chip reads.
+  const shade = g.createLinearGradient(0, p.h * 0.6, 0, p.h);
+  shade.addColorStop(0, 'rgba(0,0,0,0)');
+  shade.addColorStop(1, 'rgba(0,0,0,0.45)');
+  g.fillStyle = shade;
+  g.fillRect(0, 0, p.w, p.h);
+  if (gradedCache.size >= 32) gradedCache.delete(gradedCache.keys().next().value);
+  gradedCache.set(key, c);
+  return c;
+}
+
 /**
  * Draw the cover for `state` on `ctx` at W x H.
  * state: { images, layout, grade, gradeIntensity, title, subtitle, billing,
  *          release, seal, panels, photoMode, outline, shadow, italic,
- *          quote, quoteSource, badge, tagline }
+ *          quote, quoteSource, badge, tagline, stars, bleed }
+ *          stars === false hides the five gold stars in the quote strip
+ *          (v4.2); bleed requests the edge-to-edge family/lineup variant
+ *          (v4.3: the default for family/lineup — bleed === false opts
+ *          back out to the classic inset rendering).
  * panels[i]: { photo, zoom, ox, oy, ay, tag } — ay is the vertical
  *          anchor of the photo inside its panel (0.5 = centred).
  */
 export function drawCover(ctx, W, H, state) {
   const grade = gradeById(state.grade);
   const k = Math.max(0, Math.min(1, state.gradeIntensity ?? 0.8));
-  const panels = layoutPanels(state.layout, W, H);
+  // v4.3: the edge-to-edge variant — family/lineup only, now the DEFAULT
+  // (v4.2 had it shot-only via ?bleed=1; ?bleed=0 restores the classic
+  // inset). The strips run to the bottom edge of the frame, so no cover
+  // is left with a dead gradient band below the panels.
+  const bleed = !!state.bleed && (state.layout === 'family' || state.layout === 'lineup');
+  const panels = layoutPanels(state.layout, W, H, bleed);
   const used = panels.length;
+  // The poster layout is a full-bleed mosaic: the photos ARE the
+  // background, the title overlaps the art, and there is no sky,
+  // skyline or palm band anywhere on the frame.
+  const isPoster = state.layout === 'poster';
   // Photos arrive as { img, name } library entries (or bare images).
   const images = (state.images || []).map((e) => (e && e.img ? e.img : e)).filter(Boolean);
 
   ctx.save();
   ctx.clearRect(0, 0, W, H);
 
+  if (isPoster) {
+    // The dark ink shows through only as the thin gutters between panels.
+    ctx.fillStyle = grade.ink;
+    ctx.fillRect(0, 0, W, H);
+  } else {
   // Sky.
   const sky = ctx.createLinearGradient(0, 0, 0, H);
   grade.sky.forEach((c, i) => sky.addColorStop(i / (grade.sky.length - 1), c));
@@ -487,6 +624,7 @@ export function drawCover(ctx, W, H, state) {
 
   // Skyline behind the panels.
   drawSkyline(ctx, W, H, grade.ink, 20261120);
+  }
 
   // Panels.
   const border = Math.max(4, W * 0.006);
@@ -497,71 +635,93 @@ export function drawCover(ctx, W, H, state) {
       if (state.photoMode === 'per-panel') img = images[spec.photo % images.length];
       else img = images[0];
     }
-    ctx.save();
-    // Drop shadow behind the panel.
-    ctx.shadowColor = 'rgba(0,0,0,0.45)';
-    ctx.shadowBlur = W * 0.02;
-    ctx.shadowOffsetY = H * 0.008;
-    panelPath(ctx, p);
-    ctx.fillStyle = '#241335';
-    ctx.fill();
-    ctx.restore();
+    // The poster drops the shadow (the gutters are the design) and
+    // draws the cached graded panel in one pass. The bleed variant
+    // does the same — its thin dark gutters are the design.
+    if (!isPoster && !bleed) {
+      ctx.save();
+      // Drop shadow behind the panel.
+      ctx.shadowColor = 'rgba(0,0,0,0.45)';
+      ctx.shadowBlur = W * 0.02;
+      ctx.shadowOffsetY = H * 0.008;
+      panelPath(ctx, p);
+      ctx.fillStyle = '#241335';
+      ctx.fill();
+      ctx.restore();
+    }
 
     ctx.save();
     panelPath(ctx, p);
     ctx.clip();
-    if (img) drawPhotoCover(ctx, img, p, spec.zoom || 1, spec.ox || 0, spec.oy || 0, spec.ay ?? 0.5);
-    else {
+    if (img) {
+      const g = gradedPanel(img, p, spec, grade, k);
+      ctx.drawImage(g, p.x, p.y, p.w, p.h);
+    } else {
       ctx.fillStyle = '#3a2358';
       ctx.fillRect(p.x, p.y, p.w, p.h);
     }
-    // Grade wash over the photo.
-    ctx.globalAlpha = 0.22 * k;
-    ctx.globalCompositeOperation = 'overlay';
-    ctx.fillStyle = grade.tint;
-    ctx.fillRect(p.x, p.y, p.w, p.h);
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.globalAlpha = 1;
-    // Bottom shade so the cast chip reads.
-    const shade = ctx.createLinearGradient(0, p.y + p.h * 0.6, 0, p.y + p.h);
-    shade.addColorStop(0, 'rgba(0,0,0,0)');
-    shade.addColorStop(1, 'rgba(0,0,0,0.45)');
-    ctx.fillStyle = shade;
-    ctx.fillRect(p.x, p.y, p.w, p.h);
     ctx.restore();
 
-    // Frame.
+    // Frame: white for the classic layouts, a thin dark edge for the
+    // poster (its gutters are dark already) and the bleed variant.
     ctx.save();
     panelPath(ctx, p);
-    ctx.lineWidth = border;
-    ctx.strokeStyle = '#ffffff';
+    if (isPoster || bleed) {
+      ctx.lineWidth = Math.max(2, W * 0.002);
+      ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+    } else {
+      ctx.lineWidth = border;
+      ctx.strokeStyle = '#ffffff';
+    }
     ctx.stroke();
     ctx.restore();
 
-    // Cast tag chip.
+    // Cast tag chip. On the poster it sits angled at the TOP of its
+    // photo, just below the quote band for the top row — on the art,
+    // never hidden under the title. The bleed variant does the same:
+    // its title overlaps the panels' lower part, so a bottom chip
+    // would collide with the lettering.
     const chipH = Math.max(18, H * 0.028);
-    drawCastChip(ctx, p.x + border + 4, p.y + p.h - chipH - border - 6, chipH, spec.tag, grade);
+    if (isPoster || bleed) {
+      const chipY = p.y < H * 0.06 ? H * 0.06 + 6 : p.y + 10;
+      drawCastChip(ctx, p.x + 10, chipY, chipH, spec.tag, grade, -0.05);
+    } else {
+      drawCastChip(ctx, p.x + border + 4, p.y + p.h - chipH - border - 6, chipH, spec.tag, grade);
+    }
   });
 
-  // Palm silhouettes in front of the panels' lower corners.
-  ctx.save();
-  ctx.globalAlpha = 0.9;
-  drawPalm(ctx, W * 0.02, H * 0.72, H / 620, grade.ink);
-  drawPalm(ctx, W * 0.99, H * 0.74, H / 760, grade.ink);
-  ctx.restore();
+  // Palm silhouettes in front of the panels' lower corners — classic
+  // layouts only; the poster is all photo, edge to edge, and so is
+  // the bleed variant.
+  if (!isPoster && !bleed) {
+    ctx.save();
+    ctx.globalAlpha = 0.9;
+    drawPalm(ctx, W * 0.02, H * 0.72, H / 620, grade.ink);
+    drawPalm(ctx, W * 0.99, H * 0.74, H / 760, grade.ink);
+    ctx.restore();
+  }
 
   // Critic-quote strip across the very top: quote, five gold stars,
   // source. Panels start below it, so it never covers a photo.
   const quote = (state.quote || '').trim();
   const quoteSource = (state.quoteSource || '').trim();
   if (quote || quoteSource) {
+    // On the poster the quote sits ON the art, so it gets its own dark
+    // band across the top of the mosaic.
+    if (isPoster) {
+      ctx.fillStyle = 'rgba(6,2,12,0.52)';
+      ctx.fillRect(0, 0, W, H * 0.052);
+    }
     let qSize = Math.max(13, Math.min(W, H) * 0.019);
     const qFont = (sz) => `italic 700 ${sz}px Georgia, "Times New Roman", serif`;
     ctx.save();
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     const partA = quote ? `\u201c${quote.toUpperCase()}\u201d  ` : '';
-    const stars = '\u2605'.repeat(5);
+    // v4.2: ?stars=0 drops the five gold stars — the quote + source
+    // already carry the critic strip, and at thumbnail scale the stars
+    // collapse into a noisy gold blob between them.
+    const stars = state.stars === false ? '' : '\u2605'.repeat(5);
     const partB = quoteSource ? `  \u2014  ${quoteSource.toUpperCase()}` : '';
     ctx.font = qFont(qSize);
     const wA = ctx.measureText(partA).width;
@@ -588,8 +748,36 @@ export function drawCover(ctx, W, H, state) {
   // Season badge, top-right corner, above the panels.
   drawBadge(ctx, W * 0.955, H * 0.008, state.badge, grade.accent);
 
-  // Title block.
-  const titleY = H * 0.76;
+  // Poster scrim: a dark gradient over the lower half of the mosaic so
+  // the title, tagline and billing read on any photo behind them.
+  if (isPoster) {
+    const scrim = ctx.createLinearGradient(0, H * 0.48, 0, H);
+    scrim.addColorStop(0, 'rgba(0,0,0,0)');
+    scrim.addColorStop(0.55, 'rgba(0,0,0,0.32)');
+    scrim.addColorStop(1, 'rgba(0,0,0,0.6)');
+    ctx.fillStyle = scrim;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  // Bleed scrim (v4.3): the same dark gradient as the poster's, over
+  // the lower half of the strips down to the bottom edge — the strips
+  // now run to the frame's bottom, so the title at H*0.70, the
+  // subtitle, the tagline pill and the billing pill all sit ON the art
+  // and need the scrim behind them, exactly like the poster mosaic.
+  if (bleed) {
+    const bscrim = ctx.createLinearGradient(0, H * 0.48, 0, H);
+    bscrim.addColorStop(0, 'rgba(0,0,0,0)');
+    bscrim.addColorStop(0.55, 'rgba(0,0,0,0.32)');
+    bscrim.addColorStop(1, 'rgba(0,0,0,0.6)');
+    ctx.fillStyle = bscrim;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  // Title block. The poster puts the title ON the art: huge gradient
+  // block letters over the lower third of the mosaic, with a hard
+  // offset shadow and the script subtitle overlapping its foot. The
+  // bleed variant does the same at H*0.70 over its strips.
+  const titleY = isPoster ? H * 0.705 : bleed ? H * 0.70 : H * 0.76;
   const titleText = (state.title || 'SUNSET HEIST').toUpperCase();
   ctx.save();
   ctx.textAlign = 'center';
@@ -601,10 +789,18 @@ export function drawCover(ctx, W, H, state) {
   }
   // Big title with a sunset gradient fill. The size is capped against the
   // shorter side, so a wide canvas keeps room for the lines below it.
-  const titleSize = fitTitleFont(ctx, titleText, W * 0.94, Math.min(W * 0.115, H * 0.13));
+  // The poster title runs bigger and grades gold -> orange -> pink.
+  const titleSize = fitTitleFont(ctx, titleText, W * 0.94,
+    isPoster ? Math.min(W * 0.13, H * 0.175) : Math.min(W * 0.115, H * 0.13));
   const tg = ctx.createLinearGradient(0, titleY - titleSize * 0.55, 0, titleY + titleSize * 0.55);
-  tg.addColorStop(0, grade.titleTop);
-  tg.addColorStop(1, grade.titleBottom);
+  if (isPoster) {
+    tg.addColorStop(0, '#ffe08a');
+    tg.addColorStop(0.5, '#ff7a3d');
+    tg.addColorStop(1, '#ff2e88');
+  } else {
+    tg.addColorStop(0, grade.titleTop);
+    tg.addColorStop(1, grade.titleBottom);
+  }
   if (state.italic) {
     // Slant around the title's own centre, so the shear never shifts the
     // whole line sideways (a shear about the origin would).
@@ -619,14 +815,22 @@ export function drawCover(ctx, W, H, state) {
     ctx.strokeText(titleText, W / 2, titleY);
   }
   ctx.fillStyle = tg;
+  if (isPoster) {
+    // Hard offset shadow: a solid dark copy of the title, shifted
+    // down-right, so the letters read on any photo behind them.
+    ctx.fillStyle = 'rgba(12,4,22,0.92)';
+    ctx.fillText(titleText, W / 2 + titleSize * 0.045, titleY + titleSize * 0.06);
+    ctx.fillStyle = tg;
+  }
   ctx.fillText(titleText, W / 2, titleY);
   ctx.restore();
 
-  // Subtitle in a script-ish italic.
+  // Subtitle in a script-ish italic. On the poster it overlaps the
+  // title's foot, like a signature across the lettering.
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  const subSize = Math.max(16, Math.min(W, H) * 0.032);
+  const subSize = Math.max(16, Math.min(W, H) * (isPoster ? 0.038 : 0.032));
   ctx.font = `italic 700 ${subSize}px Georgia, "Times New Roman", serif`;
   ctx.fillStyle = grade.accent;
   if (state.shadow) {
@@ -635,7 +839,7 @@ export function drawCover(ctx, W, H, state) {
     ctx.shadowOffsetY = H * 0.005;
   }
   const sub = state.subtitle || '';
-  if (sub) ctx.fillText(sub, W / 2, titleY + titleSize * 0.62);
+  if (sub) ctx.fillText(sub, W / 2, titleY + titleSize * (isPoster ? 0.55 : 0.62));
   ctx.restore();
 
   // Neon rule under the subtitle: a short gradient bar that ties the
@@ -651,16 +855,27 @@ export function drawCover(ctx, W, H, state) {
   ctx.fillRect(W / 2 - ruleW / 2, ruleY, ruleW, Math.max(3, H * 0.004));
   ctx.restore();
 
-  // Tagline under the neon rule, small caps.
+  // Tagline under the neon rule, small caps, on its own dark pill so it
+  // reads on any grade's sky — the v3.6 bare white tagline washed out
+  // on the bright grades (Mafia Gold, Palm Noir).
   const tag = (state.tagline || '').trim();
   if (tag) {
     const tagSize = Math.max(12, Math.min(W, H) * 0.019);
+    const tagText = tag.toUpperCase();
+    const tagY = ruleY + tagSize * 1.7;
     ctx.save();
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = `700 ${tagSize}px Arial, sans-serif`;
-    ctx.fillStyle = 'rgba(255,255,255,0.92)';
-    ctx.fillText(tag.toUpperCase(), W / 2, ruleY + tagSize * 1.7);
+    const tw = ctx.measureText(tagText).width;
+    const pad = tagSize * 1.1;
+    const th = tagSize * 2.1;
+    ctx.fillStyle = 'rgba(8,4,16,0.68)';
+    ctx.beginPath();
+    ctx.roundRect(W / 2 - tw / 2 - pad, tagY - th / 2, tw + pad * 2, th, th / 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    ctx.fillText(tagText, W / 2, tagY + tagSize * 0.04);
     ctx.restore();
   }
 
@@ -685,13 +900,13 @@ export function drawCover(ctx, W, H, state) {
   }
   ctx.restore();
 
-  // Billing block.
+  // Billing block, on a dark pill so it reads on any grade's sky —
+  // the v3.6 white-on-orange billing was the lowest-contrast line.
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  const billSize = Math.max(11, W * 0.0165);
+  let billSize = Math.max(11, W * 0.0165);
   ctx.font = `700 ${billSize}px Arial, sans-serif`;
-  ctx.fillStyle = 'rgba(255,255,255,0.92)';
   let billing = (state.billing || '').trim();
   if (!billing) {
     const tags = [];
@@ -700,15 +915,42 @@ export function drawCover(ctx, W, H, state) {
       if (t) tags.push(t.toUpperCase());
     }
     billing = tags.length > 0
-      ? `STARRING ${tags.join('  ·  ')}   —   A VICE CITY STORY`
-      : 'A VICE CITY STORY';
+      ? `STARRING ${tags.join('  ·  ')}   —   A COAST CREW STORY`
+      : '— A COAST CREW STORY';
   }
-  ctx.fillText(billing.toUpperCase(), W / 2, H * 0.965);
+  const billText = billing.toUpperCase();
+  // The seal badge sits bottom-left: shrink a long billing line until
+  // its pill clears the seal with a margin, so the first letter is
+  // never hidden behind it. (The portrait auto line grew past the
+  // seal when the default suffix changed in v4.2.)
+  const sealClearX = Math.max(24, Math.min(W, H) * 0.05) * 2.3;
+  let bw = ctx.measureText(billText).width;
+  let bpad = billSize * 1.2;
+  while (billSize > 9 && W / 2 - bw / 2 - bpad < sealClearX) {
+    billSize *= 0.94;
+    ctx.font = `700 ${billSize}px Arial, sans-serif`;
+    bw = ctx.measureText(billText).width;
+    bpad = billSize * 1.2;
+  }
+  const bh = billSize * 2.2;
+  ctx.fillStyle = 'rgba(8,4,16,0.72)';
+  ctx.beginPath();
+  ctx.roundRect(W / 2 - bw / 2 - bpad, H * 0.965 - bh / 2, bw + bpad * 2, bh, bh / 2);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.95)';
+  ctx.fillText(billText, W / 2, H * 0.965 + billSize * 0.04);
   ctx.restore();
 
   // Seal badge, bottom-left, clear of the centred billing line.
   const sealR = Math.max(24, Math.min(W, H) * 0.05);
   drawSeal(ctx, sealR * 1.15, H - sealR * 1.35, sealR, state.seal, grade.accent);
+
+  // Barcode plate, bottom-right, level with the seal — poster only.
+  if (isPoster) {
+    const bcW = W * 0.075;
+    const bcH = Math.max(30, H * 0.045);
+    drawBarcode(ctx, W * 0.955 - bcW, H - sealR * 1.35 - bcH / 2, bcW, bcH);
+  }
 
   // Grain + vignette for a printed-poster feel.
   const rnd = mulberry32(77);
