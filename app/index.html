@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vice Cover Studio — GTA-style poster maker</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">VC</span>
+    <div>
+      <h1>Vice Cover Studio <span class="vtag">v3.6</span></h1>
+      <p class="tagline">Turn any photo + caption into a Vice City poster. Offline — your photos never leave this machine.</p>
+    </div>
+  </div>
+  <div class="top-actions">
+    <button id="btnShuffle" type="button" class="btn btn-warm" title="Random layout + grade">Shuffle layout</button>
+    <button id="btnRandomGrade" type="button" class="btn" title="Random colour grade">Random grade</button>
+  </div>
+</header>
+
+<main class="studio">
+  <section class="preview-col">
+    <div class="aspect-row" role="group" aria-label="Preview size">
+      <span class="row-label">Preview</span>
+      <button type="button" class="chip aspect-chip is-active" data-aspect="square">Square 1:1</button>
+      <button type="button" class="chip aspect-chip" data-aspect="portrait">Portrait 4:5</button>
+      <button type="button" class="chip aspect-chip" data-aspect="wide">Wide 16:9</button>
+    </div>
+    <div class="canvas-wrap">
+      <canvas id="stage" width="1080" height="1080" aria-label="Live cover preview"></canvas>
+    </div>
+    <p class="hint">Drag a panel on the preview to move its photo &middot; scroll over a panel to zoom &middot; click a panel to select it.</p>
+    <div class="export-row">
+      <span class="row-label">Export PNG</span>
+      <button id="btnExpSquare" type="button" class="btn btn-export">1080 &times; 1080</button>
+      <button id="btnExpPortrait" type="button" class="btn btn-export">1080 &times; 1350</button>
+      <button id="btnExpWide" type="button" class="btn btn-export">1920 &times; 1080</button>
+      <button id="btnExpAll" type="button" class="btn btn-export btn-all">Export all 3</button>
+    </div>
+    <p id="statusText" class="status" role="status">Loading sample photos&hellip;</p>
+  </section>
+
+  <aside class="controls-col">
+    <section class="card">
+      <h2>1 &middot; Photos</h2>
+      <label class="file-btn">Add your photos
+        <input id="photoFiles" type="file" accept="image/*" multiple hidden>
+      </label>
+      <button id="btnSamples" type="button" class="btn btn-ghost">Reload sample photos</button>
+      <div class="mode-row" role="group" aria-label="Sample photo set">
+        <button id="setHeist" type="button" class="chip set-chip is-active">Sunset Heist crew</button>
+        <button id="setPolice" type="button" class="chip set-chip">Police crew</button>
+        <button id="setMafia" type="button" class="chip set-chip">Family crew</button>
+        <button id="setHero" type="button" class="chip set-chip">Vice Heroes crew</button>
+      </div>
+      <div class="mode-row" role="group" aria-label="Photo mode">
+        <button id="photoModeOne" type="button" class="chip mode-chip">One photo, all panels</button>
+        <button id="photoModePer" type="button" class="chip mode-chip is-active">Different photo per panel</button>
+      </div>
+      <div id="photoStrip" class="photo-strip" aria-label="Loaded photos"></div>
+    </section>
+
+    <section class="card">
+      <h2>2 &middot; Layout &amp; crop</h2>
+      <div class="layout-row" role="group" aria-label="Panel layout">
+        <button type="button" class="chip layout-chip is-active" data-layout="collage">Four-photo collage</button>
+        <button type="button" class="chip layout-chip" data-layout="hero">Hero + two</button>
+        <button type="button" class="chip layout-chip" data-layout="trio">Triple vertical</button>
+        <button type="button" class="chip layout-chip" data-layout="grid">Grid 2 &times; 2</button>
+        <button type="button" class="chip layout-chip" data-layout="lineup">Lineup</button>
+        <button type="button" class="chip layout-chip" data-layout="slant">Slanted duo</button>
+        <button type="button" class="chip layout-chip" data-layout="family">Family lineup</button>
+        <button type="button" class="chip layout-chip" data-layout="leader">Leader + crew</button>
+        <button type="button" class="chip layout-chip" data-layout="spotlight">Spotlight centre</button>
+      </div>
+      <div id="panelChips" class="panel-chips" aria-label="Select a panel"></div>
+      <label class="field-label">Selected panel&rsquo;s cast tag
+        <input id="tagInput" type="text" value="MARINA" maxlength="12">
+      </label>
+      <label class="slider-label">Zoom <span id="zoomVal">100%</span>
+        <input id="zoomRange" type="range" min="100" max="300" value="100">
+      </label>
+      <label class="slider-label">Move left / right
+        <input id="oxRange" type="range" min="-100" max="100" value="0">
+      </label>
+      <label class="slider-label">Move up / down
+        <input id="oyRange" type="range" min="-100" max="100" value="0">
+      </label>
+      <button id="btnCenterPanel" type="button" class="btn btn-ghost">Centre this panel&rsquo;s photo</button>
+    </section>
+
+    <section class="card">
+      <h2>3 &middot; Caption &amp; lettering</h2>
+      <label class="field-label">Big title
+        <input id="titleInput" type="text" value="SUNSET HEIST" maxlength="24">
+      </label>
+      <label class="field-label">Subtitle
+        <input id="subtitleInput" type="text" value="a vice city story" maxlength="48">
+      </label>
+      <label class="field-label">Billing line <span class="dim">(blank = auto from panels)</span>
+        <input id="billingInput" type="text" value="" maxlength="120" placeholder="STARRING MARINA &middot; DANTE &middot; SOFIA &middot; RICO">
+      </label>
+      <label class="field-label">Critic quote
+        <input id="quoteInput" type="text" value="PURE SUNSET CHAOS, FRAME AFTER FRAME" maxlength="60">
+      </label>
+      <label class="field-label">Quote source
+        <input id="quoteSourceInput" type="text" value="THE PALM PRESS" maxlength="24">
+      </label>
+      <label class="field-label">Season badge
+        <input id="badgeInput" type="text" value="VOLUME ONE" maxlength="20">
+      </label>
+      <label class="field-label">Tagline
+        <input id="taglineInput" type="text" value="EVERY SUNSET HIDES A GETAWAY" maxlength="48">
+      </label>
+      <label class="field-label">Release line
+        <input id="releaseInput" type="text" value="NOW PLAYING &middot; SUMMER 2026" maxlength="40">
+      </label>
+      <label class="field-label">Seal text
+        <input id="sealInput" type="text" value="VICE COVER STUDIO" maxlength="28">
+      </label>
+      <div class="toggle-row">
+        <label><input id="chkOutline" type="checkbox" checked> Outline</label>
+        <label><input id="chkShadow" type="checkbox" checked> Drop shadow</label>
+        <label><input id="chkItalic" type="checkbox" checked> Slanted title</label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>4 &middot; Colour grade</h2>
+      <div id="gradeRow" class="grade-row" role="group" aria-label="Colour grade"></div>
+      <label class="slider-label">Grade intensity <span id="gradeVal">80%</span>
+        <input id="gradeIntensity" type="range" min="0" max="100" value="80">
+      </label>
+    </section>
+
+    <p class="fineprint">Original artwork, lettering and grades made for this app. No Rockstar Games logo, artwork or font is used. Photos stay on your machine.</p>
+  </aside>
+</main>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
